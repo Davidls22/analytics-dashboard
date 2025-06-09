@@ -1,40 +1,34 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import redisClient from '@/lib/redis';
+import { QueueService } from '@/lib/services/queue';
 
 const eventSchema = z.object({
-  eventName: z.string(),
-  properties: z.record(z.any()),
-  userId: z.string().optional(),
+  type: z.string(),
   tenantId: z.string(),
-  timestamp: z.string().datetime().optional(),
+  data: z.record(z.any())
 });
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    
-    // Validate the event data
-    const validatedEvent = eventSchema.parse({
-      ...body,
-      timestamp: body.timestamp || new Date().toISOString(),
-    });
+    const validatedEvent = eventSchema.parse(body);
 
-    // Get Redis client
-    const redis = await redisClient;
-    
-    // Add event to Redis queue
-    await redis.lPush('events:queue', JSON.stringify(validatedEvent));
-    
+    // Get queue service
+    const queue = QueueService.getInstance();
+    await queue.connect();
+
+    // Add event to queue
+    await queue.pushEvent(validatedEvent);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        { error: 'Invalid event data', details: error.errors },
+        { error: 'Invalid event data' },
         { status: 400 }
       );
     }
-    
+
     console.error('Error processing event:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

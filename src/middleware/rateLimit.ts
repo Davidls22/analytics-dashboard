@@ -1,55 +1,51 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import redisClient from '@/lib/redis';
-import { RateLimitError } from '@/lib/errors';
+import { DatabaseService } from '@/lib/services/database';
 
-interface RateLimitConfig {
-  windowMs: number;
-  max: number;
-  keyPrefix?: string;
-}
+const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_REQUESTS = 100;
 
-const defaultConfig: RateLimitConfig = {
-  windowMs: 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute
-  keyPrefix: 'rate-limit:',
-};
-
-export async function rateLimit(
-  request: NextRequest,
-  config: Partial<RateLimitConfig> = {}
-) {
-  const { windowMs, max, keyPrefix } = { ...defaultConfig, ...config };
-  const redis = await redisClient;
-  
-  // Get client IP or use a default key
-  const key = `${keyPrefix}${request.ip || 'unknown'}`;
-  
+export async function rateLimit(request: NextRequest) {
   try {
-    // Get current count
-    const count = await redis.incr(key);
+    const ip = request.ip || 'anonymous';
+    const key = `ratelimit:${ip}`;
     
-    // Set expiry on first request
-    if (count === 1) {
-      await redis.expire(key, Math.ceil(windowMs / 1000));
-    }
+    const db = DatabaseService.getInstance();
+    await db.connect();
     
-    // Check if rate limit exceeded
-    if (count > max) {
-      throw new RateLimitError();
-    }
+    const collection = db.getCollection('rate_limits');
     
-    return NextResponse.next();
-  } catch (error) {
-    if (error instanceof RateLimitError) {
-      return new NextResponse(
-        JSON.stringify({ error: 'Rate limit exceeded' }),
+    const now = new Date();
+    const windowStart = new Date(now.getTime() - WINDOW_MS);
+    
+    // Clean up old entries
+    await collection.deleteMany({
+      createdAt: { $lt: windowStart }
+    });
+    
+    // Count requests in current window
+    const count = await collection.countDocuments({
+      key,
+      createdAt: { $gte: windowStart }
+    });
+    
+    if (count >= MAX_REQUESTS) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
         { status: 429 }
       );
     }
     
-    // If Redis error, allow the request but log the error
+    // Record this request
+    await collection.insertOne({
+      key,
+      createdAt: now
+    });
+    
+    return null;
+  } catch (error) {
     console.error('Rate limit error:', error);
-    return NextResponse.next();
+    // If error, allow the request but log the error
+    return null;
   }
 } 

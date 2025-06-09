@@ -1,34 +1,34 @@
-import { createClient } from 'redis';
 import { QueueService } from '../queue';
 import { Event } from '@/types/analytics';
+import { DatabaseService } from '../database';
 
 describe('QueueService', () => {
   let queueService: QueueService;
-  let redisClient: ReturnType<typeof createClient>;
+  let db: DatabaseService;
 
   beforeAll(async () => {
     queueService = QueueService.getInstance();
+    db = DatabaseService.getInstance();
     await queueService.connect();
-    redisClient = createClient({ url: process.env.REDIS_URL });
-    await redisClient.connect();
   });
 
   afterAll(async () => {
     await queueService.disconnect();
-    await redisClient.quit();
+    await db.disconnect();
   });
 
   beforeEach(async () => {
-    await redisClient.del('events:queue');
+    // Clean up the queue collection before each test
+    const collection = db.getCollection('event_queue');
+    await collection.deleteMany({});
   });
 
   describe('pushEvent', () => {
     it('should push an event to the queue', async () => {
       const event: Event = {
-        eventName: 'test_event',
-        properties: { test: true },
-        tenantId: 'test_tenant',
-        timestamp: new Date().toISOString(),
+        type: 'test_event',
+        data: { test: true },
+        tenantId: 'test_tenant'
       };
 
       await queueService.pushEvent(event);
@@ -41,17 +41,16 @@ describe('QueueService', () => {
   describe('popEvent', () => {
     it('should pop an event from the queue', async () => {
       const event: Event = {
-        eventName: 'test_event',
-        properties: { test: true },
-        tenantId: 'test_tenant',
-        timestamp: new Date().toISOString(),
+        type: 'test_event',
+        data: { test: true },
+        tenantId: 'test_tenant'
       };
 
       await queueService.pushEvent(event);
 
       const poppedEvent = await queueService.popEvent();
       expect(poppedEvent).toBeDefined();
-      expect(poppedEvent?.eventName).toBe('test_event');
+      expect(poppedEvent?.type).toBe('test_event');
       expect(poppedEvent?.tenantId).toBe('test_tenant');
     });
 
@@ -65,17 +64,15 @@ describe('QueueService', () => {
     it('should return correct queue length', async () => {
       const events: Event[] = [
         {
-          eventName: 'test_event_1',
-          properties: { test: true },
-          tenantId: 'test_tenant',
-          timestamp: new Date().toISOString(),
+          type: 'test_event_1',
+          data: { test: true },
+          tenantId: 'test_tenant'
         },
         {
-          eventName: 'test_event_2',
-          properties: { test: true },
-          tenantId: 'test_tenant',
-          timestamp: new Date().toISOString(),
-        },
+          type: 'test_event_2',
+          data: { test: true },
+          tenantId: 'test_tenant'
+        }
       ];
 
       for (const event of events) {
@@ -84,6 +81,26 @@ describe('QueueService', () => {
 
       const queueLength = await queueService.getQueueLength();
       expect(queueLength).toBe(2);
+    });
+  });
+
+  describe('retryFailedEvents', () => {
+    it('should reset processed flag for failed events', async () => {
+      const event: Event = {
+        type: 'test_event',
+        data: { test: true },
+        tenantId: 'test_tenant'
+      };
+
+      await queueService.pushEvent(event);
+      await queueService.popEvent(); // This marks the event as processed
+
+      const initialLength = await queueService.getQueueLength();
+      expect(initialLength).toBe(0);
+
+      await queueService.retryFailedEvents();
+      const finalLength = await queueService.getQueueLength();
+      expect(finalLength).toBe(1);
     });
   });
 }); 
