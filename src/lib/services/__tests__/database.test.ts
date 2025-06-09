@@ -1,100 +1,82 @@
-import { MongoClient } from 'mongodb';
 import { DatabaseService } from '../database';
 import { Event } from '@/types/analytics';
 
 describe('DatabaseService', () => {
-  let dbService: DatabaseService;
-  let mongoClient: MongoClient;
+  let db: DatabaseService;
 
   beforeAll(async () => {
-    process.env.MONGODB_URI = 'mongodb://localhost:27017/analytics-test';
-    dbService = DatabaseService.getInstance();
-    await dbService.connect();
-    mongoClient = new MongoClient(process.env.MONGODB_URI);
-    await mongoClient.connect();
+    db = DatabaseService.getInstance();
+    await db.connect();
   });
 
   afterAll(async () => {
-    await dbService.disconnect();
-    await mongoClient.close();
+    await db.disconnect();
   });
 
   beforeEach(async () => {
-    const db = mongoClient.db('analytics-test');
-    await db.collection('events').deleteMany({});
-    await db.collection('metrics').deleteMany({});
+    const collections = ['events', 'metrics'];
+    for (const collection of collections) {
+      await db.getCollection(collection).deleteMany({});
+    }
   });
 
   describe('insertEvent', () => {
-    it('should insert an event successfully', async () => {
+    it('should insert an event', async () => {
       const event: Event = {
-        eventName: 'test_event',
-        properties: { test: true },
-        tenantId: 'test_tenant',
-        timestamp: new Date().toISOString(),
+        type: 'test_event',
+        data: { test: true },
+        tenantId: 'test_tenant'
       };
 
-      await dbService.insertEvent(event);
-
-      const db = mongoClient.db('analytics-test');
-      const insertedEvent = await db.collection('events').findOne({
-        eventName: 'test_event',
-      });
-
-      expect(insertedEvent).toBeDefined();
-      expect(insertedEvent?.eventName).toBe('test_event');
-      expect(insertedEvent?.tenantId).toBe('test_tenant');
+      await db.insertEvent(event);
+      const result = await db.getCollection('events').findOne({ type: 'test_event' });
+      expect(result).toBeDefined();
+      expect(result?.type).toBe('test_event');
     });
   });
 
   describe('updateMetrics', () => {
-    it('should update metrics successfully', async () => {
+    it('should update metrics for an event', async () => {
       const event: Event = {
-        eventName: 'test_event',
-        properties: { test: true },
-        tenantId: 'test_tenant',
-        timestamp: new Date().toISOString(),
+        type: 'test_event',
+        data: { test: true },
+        tenantId: 'test_tenant'
       };
 
-      await dbService.updateMetrics(event);
-
-      const db = mongoClient.db('analytics-test');
-      const metric = await db.collection('metrics').findOne({
+      await db.updateMetrics(event);
+      const result = await db.getCollection('metrics').findOne({
         tenantId: 'test_tenant',
-        eventName: 'test_event',
+        type: 'test_event'
       });
-
-      expect(metric).toBeDefined();
-      expect(metric?.count).toBe(1);
+      expect(result).toBeDefined();
+      expect(result?.count).toBe(1);
     });
   });
 
   describe('getMetrics', () => {
-    it('should return correct metrics', async () => {
+    it('should return metrics', async () => {
       const events: Event[] = [
         {
-          eventName: 'test_event_1',
-          properties: { test: true },
-          tenantId: 'test_tenant',
-          timestamp: new Date().toISOString(),
+          type: 'test_event_1',
+          data: { test: true },
+          tenantId: 'test_tenant'
         },
         {
-          eventName: 'test_event_2',
-          properties: { test: true },
-          tenantId: 'test_tenant',
-          timestamp: new Date().toISOString(),
-        },
+          type: 'test_event_2',
+          data: { test: true },
+          tenantId: 'test_tenant'
+        }
       ];
 
       for (const event of events) {
-        await dbService.insertEvent(event);
-        await dbService.updateMetrics(event);
+        await db.insertEvent(event);
+        await db.updateMetrics(event);
       }
 
-      const metrics = await dbService.getMetrics();
-
+      const metrics = await db.getMetrics();
       expect(metrics.totalEvents).toBe(2);
-      expect(metrics.eventsToday).toBe(2);
+      expect(metrics.eventsByType['test_event_1']).toBe(1);
+      expect(metrics.eventsByType['test_event_2']).toBe(1);
     });
   });
 }); 

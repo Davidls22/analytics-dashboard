@@ -2,50 +2,40 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { DatabaseService } from '@/lib/services/database';
 
-const WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const MAX_REQUESTS = 100;
+const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+const MAX_REQUESTS = 100; // 100 requests per minute
 
 export async function rateLimit(request: NextRequest) {
-  try {
-    const ip = request.ip || 'anonymous';
-    const key = `ratelimit:${ip}`;
-    
-    const db = DatabaseService.getInstance();
-    await db.connect();
-    
-    const collection = db.getCollection('rate_limits');
-    
-    const now = new Date();
-    const windowStart = new Date(now.getTime() - WINDOW_MS);
-    
-    // Clean up old entries
-    await collection.deleteMany({
-      createdAt: { $lt: windowStart }
-    });
-    
-    // Count requests in current window
-    const count = await collection.countDocuments({
-      key,
-      createdAt: { $gte: windowStart }
-    });
-    
-    if (count >= MAX_REQUESTS) {
-      return NextResponse.json(
-        { error: 'Too many requests' },
-        { status: 429 }
-      );
-    }
-    
-    // Record this request
-    await collection.insertOne({
-      key,
-      createdAt: now
-    });
-    
-    return null;
-  } catch (error) {
-    console.error('Rate limit error:', error);
-    // If error, allow the request but log the error
-    return null;
+  const db = DatabaseService.getInstance();
+  const collection = db.getCollection('rate_limits');
+
+  // Get IP from headers or use a fallback
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  const ip = forwardedFor ? forwardedFor.split(',')[0] : 'anonymous';
+
+  const now = Date.now();
+  const windowStart = now - RATE_LIMIT_WINDOW;
+
+  // Clean up old entries
+  await collection.deleteMany({
+    timestamp: { $lt: windowStart }
+  });
+
+  // Count requests in the current window
+  const count = await collection.countDocuments({
+    ip,
+    timestamp: { $gte: windowStart }
+  });
+
+  if (count >= MAX_REQUESTS) {
+    return new NextResponse('Too Many Requests', { status: 429 });
   }
+
+  // Record this request
+  await collection.insertOne({
+    ip,
+    timestamp: now
+  });
+
+  return null;
 } 

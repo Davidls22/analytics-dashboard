@@ -1,10 +1,9 @@
 export interface Event {
   type: string;
-  tenantId: string;
   data: Record<string, any>;
-  createdAt?: Date;
-  processed?: boolean;
-  processingAttempts?: number;
+  tenantId: string;
+  timestamp?: string;
+  userId?: string;
 }
 
 export interface EventTrend {
@@ -15,8 +14,25 @@ export interface EventTrend {
 export interface Metrics {
   totalEvents: number;
   eventsByType: Record<string, number>;
+  eventsByDate: Record<string, number>;
   eventsByTenant: Record<string, number>;
-  recentTrend: EventTrend[];
+  eventsByUser: Record<string, number>;
+  eventsToday: number;
+  eventsThisWeek: number;
+  eventsThisMonth: number;
+  averageEventsPerDay: number;
+  topEvents: Array<{
+    type: string;
+    count: number;
+  }>;
+  topTenants: Array<{
+    tenantId: string;
+    count: number;
+  }>;
+  topUsers: Array<{
+    userId: string;
+    count: number;
+  }>;
 }
 
 export interface Tenant {

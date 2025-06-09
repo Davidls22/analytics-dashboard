@@ -97,8 +97,15 @@ export class DatabaseService {
       const [
         totalEvents,
         eventsByType,
+        eventsByDate,
         eventsByTenant,
-        recentTrend
+        eventsByUser,
+        eventsToday,
+        eventsThisWeek,
+        eventsThisMonth,
+        topEvents,
+        topTenants,
+        topUsers
       ] = await Promise.all([
         db.collection('events').countDocuments(),
         db.collection('events').aggregate([
@@ -107,18 +114,57 @@ export class DatabaseService {
           Object.fromEntries(results.map(r => [r._id, r.count]))
         ),
         db.collection('events').aggregate([
+          { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, count: { $sum: 1 } } }
+        ]).toArray().then(results => 
+          Object.fromEntries(results.map(r => [r._id, r.count]))
+        ),
+        db.collection('events').aggregate([
           { $group: { _id: '$tenantId', count: { $sum: 1 } } }
         ]).toArray().then(results => 
           Object.fromEntries(results.map(r => [r._id, r.count]))
         ),
-        this.getEventTrends()
+        db.collection('events').aggregate([
+          { $match: { userId: { $exists: true } } },
+          { $group: { _id: '$userId', count: { $sum: 1 } } }
+        ]).toArray().then(results => 
+          Object.fromEntries(results.map(r => [r._id, r.count]))
+        ),
+        db.collection('events').countDocuments({ createdAt: { $gte: today } }),
+        db.collection('events').countDocuments({ createdAt: { $gte: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000) } }),
+        db.collection('events').countDocuments({ createdAt: { $gte: new Date(today.getFullYear(), today.getMonth(), 1) } }),
+        db.collection('events').aggregate([
+          { $group: { _id: '$type', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 }
+        ]).toArray().then(results => results.map(r => ({ type: r._id, count: r.count }))),
+        db.collection('events').aggregate([
+          { $group: { _id: '$tenantId', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 }
+        ]).toArray().then(results => results.map(r => ({ tenantId: r._id, count: r.count }))),
+        db.collection('events').aggregate([
+          { $match: { userId: { $exists: true } } },
+          { $group: { _id: '$userId', count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: 10 }
+        ]).toArray().then(results => results.map(r => ({ userId: r._id, count: r.count })))
       ]);
+
+      const averageEventsPerDay = totalEvents / 30; // Assuming 30 days for simplicity
 
       return {
         totalEvents,
         eventsByType,
+        eventsByDate,
         eventsByTenant,
-        recentTrend
+        eventsByUser,
+        eventsToday,
+        eventsThisWeek,
+        eventsThisMonth,
+        averageEventsPerDay,
+        topEvents,
+        topTenants,
+        topUsers
       };
     } catch (error) {
       throw new DatabaseError('Failed to get metrics', error);

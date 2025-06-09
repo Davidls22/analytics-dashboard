@@ -1,27 +1,33 @@
 import { QueueService } from '@/lib/services/queue';
 import { EventProcessor } from './processor';
+import { logger } from '@/lib/logger';
 
-async function main() {
+async function processQueue() {
+  const queue = QueueService.getInstance();
+  const processor = new EventProcessor();
+
   try {
-    const queue = QueueService.getInstance();
     await queue.connect();
-
-    console.log('Worker started');
+    logger.info('Worker started');
 
     while (true) {
-      try {
-        const event = await queue.popEvent();
-        if (event) {
-          await EventProcessor.processEvent(event);
+      const event = await queue.popEvent();
+      if (event) {
+        try {
+          await processor.processEvent(event);
+        } catch (error) {
+          logger.error('Error processing event', { error });
+          // Retry failed events
+          await queue.retryFailedEvents();
         }
-      } catch (error) {
-        console.error('Error processing event:', error);
       }
+      // Small delay to prevent CPU spinning
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
   } catch (error) {
-    console.error('Worker error:', error);
+    logger.error('Worker error', { error });
     process.exit(1);
   }
 }
 
-main(); 
+processQueue(); 

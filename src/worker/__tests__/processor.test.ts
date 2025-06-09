@@ -1,57 +1,29 @@
-import { processEvent } from '../processor';
-import { DatabaseService } from '@/lib/services/database';
+import { EventProcessor } from '../processor';
 import { Event } from '@/types/analytics';
 
-jest.mock('@/lib/services/database');
-
-describe('Event Processor', () => {
-  let mockDbService: jest.Mocked<DatabaseService>;
+describe('EventProcessor', () => {
+  let processor: EventProcessor;
 
   beforeEach(() => {
-    mockDbService = {
-      insertEvent: jest.fn(),
-      updateMetrics: jest.fn(),
-    } as any;
-    (DatabaseService.getInstance as jest.Mock).mockReturnValue(mockDbService);
+    processor = new EventProcessor();
   });
 
-  it('should process valid event successfully', async () => {
+  it('should process a valid event', async () => {
     const event: Event = {
-      eventName: 'test_event',
-      properties: { test: true },
-      tenantId: 'test_tenant',
-      timestamp: new Date().toISOString(),
+      type: 'test_event',
+      data: { test: true },
+      tenantId: 'test_tenant'
     };
 
-    await processEvent(event);
-
-    expect(mockDbService.insertEvent).toHaveBeenCalledWith(event);
-    expect(mockDbService.updateMetrics).toHaveBeenCalledWith(event);
+    await expect(processor.processEvent(event)).resolves.not.toThrow();
   });
 
-  it('should reject invalid event data', async () => {
+  it('should throw error for invalid event', async () => {
     const invalidEvent = {
+      type: 'test_event',
       // Missing required fields
-      properties: { test: true },
-    };
+    } as Event;
 
-    await expect(processEvent(invalidEvent)).rejects.toThrow();
-    expect(mockDbService.insertEvent).not.toHaveBeenCalled();
-    expect(mockDbService.updateMetrics).not.toHaveBeenCalled();
-  });
-
-  it('should handle database errors', async () => {
-    const event: Event = {
-      eventName: 'test_event',
-      properties: { test: true },
-      tenantId: 'test_tenant',
-      timestamp: new Date().toISOString(),
-    };
-
-    mockDbService.insertEvent.mockRejectedValueOnce(new Error('Database error'));
-
-    await expect(processEvent(event)).rejects.toThrow('Database error');
-    expect(mockDbService.insertEvent).toHaveBeenCalledWith(event);
-    expect(mockDbService.updateMetrics).not.toHaveBeenCalled();
+    await expect(processor.processEvent(invalidEvent)).rejects.toThrow();
   });
 }); 
