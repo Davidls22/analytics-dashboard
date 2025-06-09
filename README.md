@@ -1,21 +1,19 @@
 # Analytics Dashboard
 
-A full-stack SaaS-style analytics dashboard built with Next.js 15, MongoDB, Redis, and Tailwind CSS.
+A full-stack SaaS-style analytics dashboard built with Next.js 15, MongoDB, and Tailwind CSS.
 
 ## Features
 
 - Multi-tenant analytics dashboard
 - Real-time event ingestion via API
-- Asynchronous event processing with Redis queue
 - MongoDB for data storage
-- Beautiful UI with Tailwind CSS
+- UI with Tailwind CSS
 - Server-side rendering with Next.js App Router
 
 ## Prerequisites
 
 - Node.js 18+ and pnpm
 - MongoDB 6+
-- Redis 6+
 
 ## Setup
 
@@ -34,9 +32,6 @@ pnpm install
 ```env
 # MongoDB connection string
 MONGODB_URI=mongodb://localhost:27017/analytics
-
-# Redis connection string
-REDIS_URL=redis://localhost:6379
 
 # Optional: API key for authentication
 API_KEY=your-api-key-here
