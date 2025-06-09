@@ -45,7 +45,7 @@ export class DatabaseService {
     return this.db.collection<T>(name);
   }
 
-  private getDb(): Db {
+  getDb(): Db {
     if (!this.db) {
       throw new DatabaseError('Database not connected');
     }
@@ -54,9 +54,19 @@ export class DatabaseService {
 
   async insertEvent(event: Event) {
     try {
-      const db = this.getDb();
-      await db.collection('events').insertOne({
-        ...event,
+      // Normalize event fields
+      const eventName = event.eventName || event.type;
+      const properties = event.properties || event.data || {};
+      const tenantId = event.tenantId || 'public';
+      const userId = event.userId;
+      const timestamp = event.timestamp || new Date().toISOString();
+
+      await this.getDb().collection('events').insertOne({
+        eventName,
+        properties,
+        tenantId,
+        userId,
+        timestamp,
         processedAt: new Date(),
       });
     } catch (error) {
@@ -66,18 +76,20 @@ export class DatabaseService {
 
   async updateMetrics(event: Event) {
     try {
-      const db = this.getDb();
-      await db.collection('metrics').updateOne(
+      // Normalize event fields
+      const eventName = event.eventName || event.type;
+      const tenantId = event.tenantId || 'public';
+      await this.getDb().collection('metrics').updateOne(
         {
-          tenantId: event.tenantId,
-          type: event.type,
+          tenantId,
+          eventName,
           date: new Date().toISOString().split('T')[0],
         },
         {
           $inc: { count: 1 },
           $setOnInsert: {
-            tenantId: event.tenantId,
-            type: event.type,
+            tenantId,
+            eventName,
             date: new Date().toISOString().split('T')[0],
           },
         },

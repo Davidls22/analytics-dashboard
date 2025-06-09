@@ -1,7 +1,10 @@
 export interface Event {
-  type: string;
-  data: Record<string, any>;
-  tenantId: string;
+  // Accept both legacy and normalized fields
+  type?: string; // legacy
+  data?: Record<string, any>; // legacy
+  eventName?: string; // normalized
+  properties?: Record<string, any>; // normalized
+  tenantId?: string; // optional for public events
   timestamp?: string;
   userId?: string;
 }

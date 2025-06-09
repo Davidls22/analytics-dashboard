@@ -2,10 +2,12 @@ import { Suspense } from 'react';
 import { getRecentEvents } from '@/lib/metrics';
 
 interface Event {
-  eventName: string;
-  properties: Record<string, any>;
+  eventName?: string;
+  type?: string;
+  properties?: Record<string, any>;
+  data?: Record<string, any>;
   userId?: string;
-  tenantId: string;
+  tenantId?: string;
   timestamp: string;
 }
 
@@ -20,22 +22,18 @@ async function RecentEventsContent() {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Event</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">User</th>
-              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tenant</th>
+              <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
               <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Time</th>
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-100">
-            {events.map((event: Event) => (
-              <tr key={`${event.timestamp}-${event.eventName}`} className="hover:bg-gray-50 transition-colors">
+            {events.map((event: Event, idx: number) => (
+              <tr key={`${event.timestamp}-${event.eventName || event.type || idx}`} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {event.eventName}
+                  {event.eventName || event.type}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {event.userId || 'Anonymous'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {event.tenantId}
+                  {JSON.stringify(event.properties || event.data || {})}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {new Date(event.timestamp).toLocaleString()}

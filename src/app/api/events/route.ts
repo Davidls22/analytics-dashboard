@@ -1,34 +1,40 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
 import { QueueService } from '@/lib/services/queue';
-
-const eventSchema = z.object({
-  type: z.string(),
-  tenantId: z.string(),
-  data: z.record(z.any())
-});
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const validatedEvent = eventSchema.parse(body);
+    // Accept both 'type' or 'name' for event type
+    // Accept both 'data' or 'properties' for event data
+    // Accept optional 'tenantId', 'userId', and 'timestamp'
+    const eventName = body.type || body.name;
+    const properties = body.data || body.properties || {};
+    const tenantId = body.tenantId || 'public';
+    const userId = body.userId || undefined;
+    const timestamp = body.timestamp || new Date().toISOString();
+
+    if (!eventName) {
+      return NextResponse.json(
+        { error: 'Missing event type/name' },
+        { status: 400 }
+      );
+    }
 
     // Get queue service
     const queue = QueueService.getInstance();
     await queue.connect();
 
-    // Add event to queue
-    await queue.pushEvent(validatedEvent);
+    // Add normalized event to queue
+    await queue.pushEvent({
+      eventName,
+      properties,
+      tenantId,
+      userId,
+      timestamp,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid event data' },
-        { status: 400 }
-      );
-    }
-
     console.error('Error processing event:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

@@ -15,7 +15,7 @@ export default function DashboardPage() {
         <div className="mt-12">
           <RecentEvents />
         </div>
-      </div>
-    </main>
+        </div>
+      </main>
   );
 }

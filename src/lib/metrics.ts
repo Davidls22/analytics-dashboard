@@ -6,10 +6,12 @@ interface EventTrend {
 }
 
 interface Event {
-  eventName: string;
-  properties: Record<string, any>;
+  eventName?: string;
+  type?: string;
+  properties?: Record<string, any>;
+  data?: Record<string, any>;
   userId?: string;
-  tenantId: string;
+  tenantId?: string;
   timestamp: string;
 }
 
@@ -109,8 +111,8 @@ export async function getRecentEvents(): Promise<Event[]> {
     .toArray();
   
   return events.map(event => ({
-    eventName: event.eventName,
-    properties: event.properties,
+    eventName: event.eventName || event.type,
+    properties: event.properties || event.data || {},
     userId: event.userId,
     tenantId: event.tenantId,
     timestamp: event.timestamp

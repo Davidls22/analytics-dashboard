@@ -35,8 +35,19 @@ export class QueueService {
 
   async pushEvent(event: Event) {
     try {
+      // Normalize event fields
+      const eventName = event.eventName || event.type;
+      const properties = event.properties || event.data || {};
+      const tenantId = event.tenantId || 'public';
+      const userId = event.userId;
+      const timestamp = event.timestamp || new Date().toISOString();
+
       await this.db.getCollection(this.collection).insertOne({
-        ...event,
+        eventName,
+        properties,
+        tenantId,
+        userId,
+        timestamp,
         createdAt: new Date(),
         processed: false,
         processingAttempts: 0
@@ -71,9 +82,11 @@ export class QueueService {
       await this.cleanupOldEvents();
 
       return {
-        type: result.type,
-        tenantId: result.tenantId,
-        data: result.data
+        eventName: result.eventName || result.type,
+        properties: result.properties || result.data || {},
+        tenantId: result.tenantId || 'public',
+        userId: result.userId,
+        timestamp: result.timestamp,
       };
     } catch (error) {
       throw new QueueError('Failed to pop event from queue', error);
