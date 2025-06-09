@@ -1,4 +1,4 @@
-import { QueueService } from '@/lib/services/queue';
+import clientPromise from '@/lib/mongodb'; 
 
 // Read allowed origins from .env
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
@@ -29,9 +29,6 @@ export async function POST(request: Request) {
   const origin = request.headers.get('origin');
   try {
     const body = await request.json();
-    // Accept both 'type' or 'name' for event type
-    // Accept both 'data' or 'properties' for event data
-    // Accept optional 'tenantId', 'userId', and 'timestamp'
     const eventName = body.type || body.name;
     const properties = body.data || body.properties || {};
     const tenantId = body.tenantId || 'public';
@@ -45,17 +42,16 @@ export async function POST(request: Request) {
       });
     }
 
-    // Get queue service
-    const queue = QueueService.getInstance();
-    await queue.connect();
-
-    // Add normalized event to queue
-    await queue.pushEvent({
+    // Insert directly into events collection
+    const client = await clientPromise;
+    const db = client.db('analytics');
+    await db.collection('events').insertOne({
       eventName,
       properties,
       tenantId,
       userId,
       timestamp,
+      createdAt: new Date(),
     });
 
     return new Response(JSON.stringify({ success: true }), {
